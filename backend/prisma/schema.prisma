@@ -1,0 +1,274 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  student
+  teacher
+  employee
+  applicant
+  guest
+  admin
+}
+
+enum ObjectType {
+  classroom
+  laboratory
+  department
+  office
+  corridor
+  entrance
+  stairs
+  information
+  other
+}
+
+enum NodeType {
+  room
+  corridor
+  intersection
+  entrance
+  stairs
+}
+
+enum EdgeType {
+  corridor
+  stairs
+  entrance
+  internal
+}
+
+enum ModelStatus {
+  draft
+  published
+  archived
+}
+
+model User {
+  id           Int          @id @default(autoincrement())
+  email        String       @unique
+  passwordHash String
+  name         String
+  role         Role         @default(guest)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  profile      UserProfile?
+  routes       Route[]
+  favorites    Favorite[]
+  history      UserHistory[]
+  auditLogs    AuditLog[]
+}
+
+model UserProfile {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @unique
+  user        User     @relation(fields: [userId], references: [id])
+  faculty     String?
+  course      Int?
+  interests   Json?
+  preferences Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Building {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  address     String?
+  floors      Floor[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Floor {
+  id          Int             @id @default(autoincrement())
+  buildingId  Int
+  building    Building        @relation(fields: [buildingId], references: [id])
+  number      Int
+  name        String
+  planUrl     String?
+  width       Float
+  height      Float
+  isPublished Boolean         @default(false)
+  objects     SpatialObject[]
+  nodes       GraphNode[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model SpatialObject {
+  id          Int             @id @default(autoincrement())
+  floorId     Int
+  floor       Floor           @relation(fields: [floorId], references: [id])
+  name        String
+  type        ObjectType
+  roomNumber  String?
+  description String?
+  imageUrl    String?
+
+  // Связь с категорией
+  categoryId  Int?
+  category    Category?       @relation(fields: [categoryId], references: [id])
+
+  // Связь с персоной
+  personId    Int?
+  person      Person?         @relation(fields: [personId], references: [id])
+
+  // Связь с медиа
+  mediaId     Int?
+  media       Media?          @relation(fields: [mediaId], references: [id])
+
+  x           Float
+  y           Float
+  isAvailable Boolean         @default(true)
+  isPublished Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  nodes       GraphNode[]
+  favorites   Favorite[]
+  history     UserHistory[]
+  events      Event[]         // ИСПРАВЛЕНО: Один объект может быть местом для многих событий
+}
+
+model GraphNode {
+  id         Int         @id @default(autoincrement())
+  floorId    Int
+  floor      Floor       @relation(fields: [floorId], references: [id])
+  objectId   Int?
+  object     SpatialObject? @relation(fields: [objectId], references: [id])
+  type       NodeType
+  x          Float
+  y          Float
+  edgesFrom  GraphEdge[] @relation("NodeEdgesFrom")
+  edgesTo    GraphEdge[] @relation("NodeEdgesTo")
+}
+
+model GraphEdge {
+  id            Int      @id @default(autoincrement())
+  fromNodeId    Int
+  fromNode      GraphNode @relation("NodeEdgesFrom", fields: [fromNodeId], references: [id])
+  toNodeId      Int
+  toNode        GraphNode @relation("NodeEdgesTo", fields: [toNodeId], references: [id])
+  distance      Float
+  cost          Float
+  type          EdgeType
+  accessible    Boolean  @default(true)
+  bidirectional Boolean  @default(true)
+}
+
+model Route {
+  id         Int      @id @default(autoincrement())
+  userId     Int?
+  user       User?    @relation(fields: [userId], references: [id])
+  fromNodeId Int
+  toObjectId Int
+  algorithm  String
+  distance   Float
+  duration   Int
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  steps      RouteStep[]
+}
+
+model RouteStep {
+  id          Int     @id @default(autoincrement())
+  routeId     Int
+  route       Route   @relation(fields: [routeId], references: [id])
+  order       Int
+  nodeId      Int
+  instruction String
+  distance    Float
+  floorId     Int
+  direction   String?
+}
+
+model Favorite {
+  id       Int      @id @default(autoincrement())
+  userId   Int
+  user     User     @relation(fields: [userId], references: [id])
+  objectId Int
+  object   SpatialObject @relation(fields: [objectId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([userId, objectId])
+}
+
+model UserHistory {
+  id       Int      @id @default(autoincrement())
+  userId   Int
+  user     User     @relation(fields: [userId], references: [id])
+  objectId Int
+  object   SpatialObject @relation(fields: [objectId], references: [id])
+  action   String
+  metadata Json?
+  createdAt DateTime @default(now())
+}
+
+model SpatialModelVersion {
+  id          Int         @id @default(autoincrement())
+  version     String      @unique
+  status      ModelStatus @default(draft)
+  createdAt   DateTime    @default(now())
+  publishedAt DateTime?
+  createdBy   Int
+}
+
+// === ВСПОМОГАТЕЛЬНЫЕ МОДЕЛИ (ИСПРАВЛЕННЫЕ СВЯЗИ) ===
+
+model Category {
+  id          Int             @id @default(autoincrement())
+  name        String          @unique
+  description String?
+  objects     SpatialObject[]
+}
+
+model Person {
+  id          Int             @id @default(autoincrement())
+  firstName   String
+  lastName    String
+  position    String?
+  objects     SpatialObject[]
+}
+
+model Event {
+  id          Int             @id @default(autoincrement())
+  title       String
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+
+  // ИСПРАВЛЕНО: Связь определяется только здесь
+  locationId  Int?
+  location    SpatialObject?  @relation(fields: [locationId], references: [id])
+}
+
+model Media {
+  id           Int             @id @default(autoincrement())
+  filename     String
+  url          String
+  mimeType     String
+  size         Int
+  uploadedById Int
+  createdAt    DateTime        @default(now())
+
+  // ИСПРАВЛЕНО: Добавлена обратная связь
+  spatialObjects SpatialObject[]
+}
+
+model AuditLog {
+  id          Int             @id @default(autoincrement())
+  userId      Int?
+  user        User?           @relation(fields: [userId], references: [id])
+  action      String
+  entity      String
+  entityId    Int?
+  details     String?
+  createdAt   DateTime        @default(now())
+}

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Калибровка координат</title>
+    <style>
+        body { margin: 0; background: #1a1a1a; color: white; font-family: sans-serif; }
+        #info { position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 6px; z-index: 10; }
+        img { display: block; max-width: 100%; cursor: crosshair; }
+    </style>
+</head>
+<body>
+<div id="info">
+    Кликните по карте — координаты появятся ниже.<br>
+    Размеры изображения: <span id="size">...</span><br>
+    <textarea id="coords" rows="10" style="width: 300px; margin-top: 8px;"></textarea>
+</div>
+<img id="map" src="/images/floors/floor-4.svg" />
+<script>
+    const img = document.getElementById('map');
+    const coords = document.getElementById('coords');
+    const size = document.getElementById('size');
+    let points = [];
+
+    img.onload = () => {
+        size.textContent = `${img.naturalWidth} x ${img.naturalHeight}`;
+    };
+
+    img.onclick = (e) => {
+        const rect = img.getBoundingClientRect();
+        const scaleX = img.naturalWidth / rect.width;
+        const scaleY = img.naturalHeight / rect.height;
+        const x = Math.round((e.clientX - rect.left) * scaleX);
+        const y = Math.round((e.clientY - rect.top) * scaleY);
+        points.push({ x, y });
+        coords.value = points.map(p => `x: ${p.x}, y: ${p.y}`).join('\n');
+    };
+</script>
+</body>
+</html>
